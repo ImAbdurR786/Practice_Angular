@@ -1,0 +1,397 @@
+html..
+
+
+<table border="2" class="table">
+   
+    <tr>
+        <th (click)="sort('id')">ID</th>
+        <th (click)="sort('name')">Name</th>
+        <th></th>
+        <th></th>
+    </tr>
+
+    <tr *ngFor="let book of bookArr | orderby:column:order">
+        <td>{{ book.id | currency:"USD"}}</td>
+        <td >{{ book.name }}</td>
+        <td><input type="button" (click)="delete(book.name)" value="Delete" class="btn btn-primary"></td>
+        <td><input type="button" (click)="update()" value="Update"></td>
+    </tr>
+
+</table>
+
+<input type="button" (click)="search()" value="Search">
+
+<div *ngIf=!Isupdate>
+<form #Updat="ngForm" (ngSubmit)="Updates(Updat.value)">
+<table>
+    <tr>
+        <td>Enter the ID</td>
+        <input type="text" name="updId" ngModel>
+    </tr>
+    <tr>
+        <td>Enter the Name</td>
+        <input type="text" name="updName" ngModel>
+    </tr>
+    <tr>
+        <input type="submit" value="Update">
+    </tr>
+</table>
+</form>
+</div>
+
+
+
+<div *ngIf=!Issearch>
+<form #search = "ngForm" (ngSubmit)="Searchs(search.value)">
+    <table>
+        <select>
+            <option *ngFor="let g of genre">{{g}}</option>
+        </select>
+        <tr>
+            <td>Enter the ID number</td>
+            <td><input type="text" name="searchID" ngModel></td>
+        </tr>
+        <tr>
+            <td><input type="submit" value="Search"></td>
+        </tr>
+    </table>
+</form>
+</div>
+
+<table class="table">
+    
+    <tr>
+        <th>ID</th>
+        <th>Name</th>
+    </tr>
+
+    <tr *ngFor="let book of BookSearch">
+        <td>{{book.id}}</td>
+        <td>{{book.name}}</td>
+    </tr>
+
+</table>
+
+
+
+ts..
+import { Component, OnInit } from '@angular/core';
+import { BookService} from '../book.service';
+import { Book } from '../book';
+
+@Component({
+  selector: 'app-display',
+  templateUrl: './display.component.html',
+  styleUrls: ['./display.component.css']
+})
+export class DisplayComponent implements OnInit {
+
+  service:BookService;
+  bookArr: Book[] = [];
+ 
+  constructor(service:BookService) {
+    this.service = service;
+   }
+
+  ngOnInit() {
+    this.service.fetchData();
+    this.bookArr = this.service.getData();
+  }
+
+  delete(data:any){
+    this.service.delete(data);
+    this.bookArr = this.service.getData();
+  }
+
+  Isupdate: boolean = true;
+  update(){
+    this.Isupdate = !this.Isupdate;
+  }
+
+  Updates(data:any){
+    let book = new Book(data.updId,data.updName);
+    this.service.updt(book);
+  }
+
+  Issearch: boolean = true;
+  search(){
+    this.Issearch = !this.Issearch;
+  }
+
+  BookSearch: Book[] = [];
+  genre  = ["id","name"]; 
+
+  Searchs(data:any){
+    this.BookSearch = this.service.search(data);
+  }
+
+  column:string = "id";
+  order:boolean = true;
+  
+  sort(column: string){
+  
+    if(this.column == column){
+      this.order = !this.order;
+    }
+    else{
+      this.order = true;
+      this.column = column;
+    }
+  }
+
+}
+
+
+
+service..
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Book } from './book';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class BookService {
+
+  http: HttpClient;
+  fetch: boolean = false;
+  book: Book;
+  bookArray: Book[] = [];
+  
+
+  constructor(http: HttpClient) {
+    this.http = http;
+   }
+
+   fetchData(){
+     this.http.get('./assets/Books.json')
+     .subscribe(data =>{
+       if(!this.fetch){
+         this.convert(data);
+         this.fetch = true;
+       }
+     })
+   }
+
+   convert(data:any){
+     
+     for(let book of data["Books"]){
+       this.book = new Book(book.id,book.name);
+       this.bookArray.push(this.book);
+     }
+   }
+
+   getData(): Book[]{
+     return this.bookArray;
+   }
+
+   delete(data:any){
+
+    let foundIndex:number = -1;
+    for(let i=0; i< this.bookArray.length; i++){
+      let refbook = this.bookArray[i];
+      if(refbook.name==data){
+        foundIndex = i;
+        break;
+      }
+    }
+    this.bookArray.splice(foundIndex,1);
+   }
+
+   add(data:any){
+     let book = new Book(data.addId,data.addName);
+     this.bookArray.push(book);
+   }
+
+   updt(data:Book){
+     for(let i=0; i<this.bookArray.length; i++){
+       let book = this.bookArray[i];
+       
+       if(book.id==data.id){
+          book.name = data.name;
+       }
+     }
+   }
+
+   BookSearch: Book[];
+   
+   search(data:any){
+     this.BookSearch = [];
+     for(let i=0; i<this.bookArray.length; i++){
+       let book = this.bookArray[i];
+       console.log(data.searchID);
+       console.log(book.id);
+       if( data.searchID == book.id){
+         this.BookSearch.push(book);} 
+     }
+     return this.BookSearch;
+   }
+
+}
+
+
+
+pipe...
+
+import { Pipe, PipeTransform } from '@angular/core';
+
+@Pipe({
+  name: 'orderby'
+})
+
+export class OrderbyPipe implements PipeTransform {
+
+  transform( arr: any[], column:string, order:boolean) {
+
+    if(column==undefined){
+      return arr;
+    }
+    
+    let result: any[] ;
+   
+    if(order){
+      result = this.ascending(arr,column);
+    }else{
+      result = this.descending(arr,column);
+    }
+    return result;
+  }
+
+  ascending(arr:any[],column:string):any[]{
+   arr.sort((a:any , b:any)=>{
+     if(a[column]>b[column]){
+       return 1;
+     }
+     return -1;
+   })
+    return arr;
+  }
+
+  descending(arr:any[],column:string):any[]{
+   arr.sort((a:any, b:any)=>{
+    if(a[column]>b[column]){
+      return -1;
+    }
+    return 1;
+   })
+    return arr;
+  }
+}
+
+....
+
+indedx.html
+
+head;;
+
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js"></script>
+
+..
+
+appmodule
+
+...
+import { BrowserModule } from '@angular/platform-browser';
+import { NgModule } from '@angular/core';
+
+import { AppRoutingModule } from './app-routing.module';
+import { AppComponent } from './app.component';
+import {FormsModule} from '@angular/forms';
+import { DisplayComponent } from './display/display.component';
+import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { BookService } from './book.service';
+import { AddComponent } from './add/add.component';
+import { UpdateComponent } from './update/update.component';
+import { OrderbyPipe } from './orderby.pipe';
+
+@NgModule({
+  declarations: [
+    AppComponent,
+    DisplayComponent,
+    AddComponent,
+    UpdateComponent,
+    OrderbyPipe
+  ],
+  imports: [
+    BrowserModule,
+    AppRoutingModule,
+    HttpClientModule,
+    FormsModule
+  ],
+  providers: [HttpClient,BookService],
+  bootstrap: [AppComponent]
+})
+export class AppModule { }
+...
+
+
+app.ts
+
+..
+<!--The content below is only a placeholder and can be replaced.-->
+<div style="text-align:center">
+  <h1>
+    Welcome to {{ title }}!
+  </h1>
+
+<div class="jumbotron text-center">
+
+  <a routerLink='/display' class="btn btn-link">DisplayList</a>
+  <a routerLink='/add' class="btn btn-link">Add Books</a>
+  
+</div>
+
+<router-outlet></router-outlet>
+...
+
+add.html
+
+<form #addForm="ngForm" (ngSubmit)="add(addForm.value)">
+    <table>
+        <tr>
+            <td>Enter the ID no.</td>
+            <td><input type="text" name="addId" placeholder="Enter the Id" ngModel></td>
+        </tr>
+        <tr>
+            <td>Enter the Name</td>
+            <td><input type="text" name="addName" placeholder="Enter the Name" ngModel></td>
+        </tr>
+        <tr>
+            <input type="submit" value="Add-Book"> 
+        </tr>
+    </table>
+</form>
+
+..
+add.ts
+
+
+import { Component, OnInit } from '@angular/core';
+import { BookService } from '../book.service';
+
+@Component({
+  selector: 'app-add',
+  templateUrl: './add.component.html',
+  styleUrls: ['./add.component.css']
+})
+export class AddComponent implements OnInit {
+  service: BookService;
+  
+  constructor(service: BookService) {
+    this.service = service;
+   }
+
+  add(data:any){
+    this.service.add(data);
+   }
+
+  ngOnInit() {
+  }
+
+}
+
+
+...
